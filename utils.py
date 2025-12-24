@@ -268,7 +268,8 @@ class Utils:
         top_y = min(bbox[1], bbox[3])
         bottom_y = max(bbox[1], bbox[3])
         if len(bbox) > 4:
-            return [left_x, top_y, right_x, bottom_y, bbox[4], bbox[5]]
+            # Keep all elements after bbox[3] (track_id, conf, class, etc.)
+            return [left_x, top_y, right_x, bottom_y] + bbox[4:]
         return [left_x, top_y, right_x, bottom_y]
 
     @staticmethod
@@ -434,12 +435,13 @@ class Utils:
             return []
 
         # Get positions of safety cones
+        # Data format: [x1, y1, x2, y2, track_id, conf, class]
         cone_positions = np.array([
             (
                 (float(data[0]) + float(data[2])) / 2,
                 (float(data[1]) + float(data[3])) / 2,
             )
-            for data in datas if data[5] == 6
+            for data in datas if data[6] == 6  # class_id is at index 6
         ])
 
         # Check if there are at least three safety cones to form a polygon
@@ -495,7 +497,8 @@ class Utils:
 
         # Count the number of people within the controlled area
         for data in datas:
-            if data[5] == 5:  # Check if it's a person
+            # Data format: [x1, y1, x2, y2, track_id, conf, class]
+            if data[6] == 5:  # Check if it's a person (class_id at index 6)
                 x_center = (data[0] + data[2]) / 2
                 y_center = (data[1] + data[3]) / 2
                 point = Point(x_center, y_center)
@@ -577,7 +580,8 @@ class Utils:
         """
         poles: list[tuple[float, float, float]] = []
         for d in datas:
-            if d[5] == 9:  # class == 9 => utility pole
+            # Data format: [x1, y1, x2, y2, track_id, conf, class]
+            if d[6] == 9:  # class == 9 => utility pole (class_id at index 6)
                 left, top, right, bottom, *_ = d
                 cx: float = (left + right) / 2.0
                 cy: float = bottom
@@ -818,7 +822,8 @@ class Utils:
             - Only considers entries with class == 5 (person).
             - Uses centre point of bounding box for inclusion test.
         """
-        persons: list[list[float]] = [d for d in datas if d[5] == 5]
+        # Data format: [x1, y1, x2, y2, track_id, conf, class]
+        persons: list[list[float]] = [d for d in datas if d[6] == 5]  # class_id at index 6
         found_people: set[tuple[float, float]] = set()
         for p in persons:
             left, top, right, bottom, *_ = p

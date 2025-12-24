@@ -1,0 +1,17 @@
+[
+    {
+        "video_url": 0,
+        "model_key": "yolov8n",
+        "site": "테스트현장",
+        "stream_name": "웹캠",
+        "detect_with_server": false,
+        "detection_items": {
+            "person": true,
+            "car": true,
+            "truck": true
+        },
+        "work_start_hour": 0,
+        "work_end_hour": 24,
+        "store_in_redis": false
+    }
+]
