@@ -236,7 +236,7 @@ class Utils:
     def should_notify(
         timestamp: int,
         last_notification_time: int,
-        cooldown_period: int = 300,
+        cooldown_period: int = 30,
     ) -> bool:
         """
         Check if a notification should be sent based on the cooldown period.

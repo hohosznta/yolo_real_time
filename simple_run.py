@@ -11,7 +11,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 from danger_detector import DangerDetector
-from kakao_sender import KakaoSender
+from kakao_sender import KakaoNotifier
 from live_stream_detection import LiveStreamDetector
 from utils import Utils
 
@@ -41,7 +41,7 @@ async def run_simple_stream():
     'detect_in_utility_pole_restricted_area': False,
     'detect_machinery_close_to_pole': False,
 })
-    kakao_sender = KakaoSender()
+    kakao_notifier = KakaoNotifier()
 
     last_notification_time = 0
     frame_count = 0
@@ -100,27 +100,57 @@ async def run_simple_stream():
             if warnings:
                 total_warnings += len(warnings)
                 print(f"⚠️ 위험 감지! {len(warnings)}건의 위반 사항")
-                for warning in warnings:
-                    print(f"  - {warning.get('type', 'unknown')}: {warning.get('message', '')}")
+                for warning_type, warning_data in warnings.items():
+                    # Convert warning type to readable message
+                    message = warning_type.replace('_', ' ').replace('warning ', '')
+                    count = warning_data.get('count', 0)
+                    print(f"  - {message}: {count}명/개")
 
-                # 알림 간격 체크 (5분)
+                # 알림 간격 체크 (30초)
                 if Utils.should_notify(int(ts), last_notification_time):
                     print("📱 카카오톡 알림 전송 중...")
-                    success = await kakao_sender.send_violation_alert(
+
+                    # warnings를 List[Dict] 형태로 변환
+                    warning_list = []
+                    warning_descriptions = {
+                        'warning_no_hardhat': '안전모 미착용,  산업안전보건법 제175조 제6항에 의거 300만원 이하의 과태료에 처해질 수 있습니다.',
+                        'warning_no_safety_vest': '안전조끼 미착용, 산업안전보건법 제175조 제6항에 의거 300만원 이하의 과태료에 처해질 수 있습니다.',
+                        'warning_close_to_machinery': '중장비 근접 위험',
+                        'warning_close_to_vehicle': '차량 근접 위험',
+                        'warning_people_in_controlled_area': '통제구역 침입',
+                        'warning_people_in_utility_pole_controlled_area': '전신주 통제구역 침입',
+                        'detect_machinery_close_to_pole': '전신주 근처 중장비 위험'
+                    }
+
+                    for warning_type, warning_data in warnings.items():
+                        count = warning_data.get('count', 0)
+                        description = warning_descriptions.get(warning_type, warning_type.replace('_', ' '))
+                        warning_list.append({
+                            'type': warning_type,
+                            'description': f"{description}"
+                        })
+
+                    result = await kakao_notifier.send_violation_alert(
                         site=site,
                         stream_name=stream_name,
-                        warnings=warnings,
-                        detection_time=detection_time,
+                        warnings=warning_list,
+                        detection_time=detection_time,     
                     )
 
+                    if isinstance(result, tuple):
+                        success, error_msg = result
+                    else:
+                        success = result
+                        error_msg = "상세 메시지 없음"
+
                     if success:
-                        print(" 카카오톡 알림 전송 완료")
+                        print(f"✅ 카카오톡 알림 전송 완료: {error_msg}")
                         last_notification_time = int(ts)
                     else:
-                        print(" 카카오톡 알림 전송 실패")
+                        print(f"❌ 카카오톡 알림 전송 실패: {error_msg}")
                 else:
                     remaining = 300 - (int(ts) - last_notification_time)
-                    print(f" 다음 알림까지: {remaining}초")
+                    print(f"⏳ 다음 알림까지: {remaining}초")
 
             # 처리 시간 표시
             proc_time = time.time() - start
@@ -134,17 +164,24 @@ async def run_simple_stream():
         # 정리
         print("🧹 리소스 정리 중...")
         live_stream_detector.release_resources()
-        await kakao_sender.close()
+        await kakao_notifier.close()
         print("✅ 종료 완료")
 
 
 if __name__ == "__main__":
     print("BlueGuard 간단 실행 모드")
 
-    # 카카오 토큰 확인
-    if not os.getenv('KAKAO_ACCESS_TOKEN'):
-        print("카카오 토큰이 설정되지 않았습니다.")
-        print(".env 파일에 KAKAO_ACCESS_TOKEN을 설정하세요.")
+    # 카카오 설정 확인
+    if not os.getenv('KAKAO_REST_API_KEY'):
+        print("⚠️ 카카오 REST API 키가 설정되지 않았습니다.")
+        print(".env 파일에 KAKAO_REST_API_KEY를 설정하세요.")
+        print()
+
+    if not os.path.exists("kakao_access_token_data.json") and not os.getenv('KAKAO_AUTH_CODE'):
+        print("⚠️ 카카오 인증이 필요합니다.")
+        print("1. 카카오 개발자 사이트에서 인증 코드를 받으세요")
+        print("2. .env 파일에 KAKAO_AUTH_CODE를 설정하세요")
+        print("3. 또는 기존 kakao_access_token_data.json 파일을 복사하세요")
         print()
 
     # 실행
